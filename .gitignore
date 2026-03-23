@@ -1,0 +1,4 @@
+.idea
+target/
+confluence_comments_*.xlsx
+config.properties

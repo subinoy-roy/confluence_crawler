@@ -1,0 +1,38 @@
+plugins {
+    id 'java'
+    id 'application'
+    id 'com.github.johnrengelman.shadow' version '8.1.1'
+}
+
+group = 'com.confluence'
+version = '1.0.0'
+sourceCompatibility = '11'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // Apache POI for Excel
+    implementation 'org.apache.poi:poi:5.2.5'
+    implementation 'org.apache.poi:poi-ooxml:5.2.5'
+    
+    // JSON processing
+    implementation 'org.json:json:20231013'
+}
+
+application {
+    mainClass = 'ConfluenceCommentsExtractor'
+}
+
+jar {
+    manifest {
+        attributes 'Main-Class': 'ConfluenceCommentsExtractor'
+    }
+}
+
+shadowJar {
+    archiveBaseName.set('confluence-comments-extractor')
+    archiveClassifier.set('')
+    archiveVersion.set('1.0.0')
+}
