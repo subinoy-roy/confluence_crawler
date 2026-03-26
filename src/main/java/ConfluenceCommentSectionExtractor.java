@@ -97,7 +97,6 @@ public class ConfluenceCommentSectionExtractor {
                 sr.functionName = row.functionName;
                 sr.functionType = row.functionType;
                 sr.pageId = row.pageId;
-                sr.numberOfComments = pageComments.size();
                 summaryRows.add(sr);
             } catch (Exception e) {
                 System.err.println("Error processing page " + row.pageId + ": " + e.getMessage());
@@ -109,7 +108,6 @@ public class ConfluenceCommentSectionExtractor {
                 sr.functionName = row.functionName;
                 sr.functionType = row.functionType;
                 sr.pageId = row.pageId;
-                sr.numberOfComments = 0;
                 summaryRows.add(sr);
             }
         }
@@ -117,9 +115,9 @@ public class ConfluenceCommentSectionExtractor {
         // Write all comments to a single Excel file
         String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
         String outputPath = "d:/outputs/all_confluence_comments_" + timestamp + ".xlsx";
-        writeExcel(allComments, outputPath);
+        writeExcel(allComments, outputPath, summaryRows);
         printExecutionSummary(summaryRows);
-        printExecutionSummaryTabular(summaryRows);
+        // printExecutionSummaryTabular(summaryRows);
 
         System.out.println();
         System.out.println("Done! Output: " + outputPath);
@@ -154,6 +152,7 @@ public class ConfluenceCommentSectionExtractor {
                 inputRow.functionName = getCellValue(row, 3);
                 inputRow.functionType = getCellValue(row, 4);
                 inputRow.pageId = getCellValue(row, 5);
+                inputRow.reviewerName = getCellValue(row, 6);
 
                 if (!inputRow.pageId.isEmpty()) {
                     rows.add(inputRow);
@@ -230,11 +229,11 @@ public class ConfluenceCommentSectionExtractor {
      * @param rows list of per-page summary records to print
      */
     private static void printExecutionSummary(List<SummaryRecord> rows) {
-        System.out.println();
-        System.out.println("Module, Legacy ID, New ID, Function Name, "
-                + "Function Type, pageId, Number of comments");
+        System.out.println("\nSummary of Confluence comments (per-page) [You can copy and paste this into Excel]:");
+        System.out.println("Module\tLegacy ID\tNew ID\tFunction Name\t"
+                + "Function Type\tpageId\tNumber of comments");
         for (SummaryRecord r : rows) {
-            System.out.println(String.join(", ",
+            System.out.println(String.join("\t",
                     safe(r.module),
                     safe(r.legacyId),
                     safe(r.newId),
@@ -443,6 +442,8 @@ public class ConfluenceCommentSectionExtractor {
                 rec.newId = inputRow.newId;
                 rec.functionName = inputRow.functionName;
                 rec.functionType = inputRow.functionType;
+                rec.pageId = pageId;
+                rec.reviewerName = inputRow.reviewerName;
 
                 // Populate comment fields
                 rec.type              = "Inline";
@@ -528,6 +529,8 @@ public class ConfluenceCommentSectionExtractor {
                 rec.newId = inputRow.newId;
                 rec.functionName = inputRow.functionName;
                 rec.functionType = inputRow.functionType;
+                rec.pageId = pageId;
+                rec.reviewerName = inputRow.reviewerName;
 
                 // Populate comment fields
                 rec.type              = "Footer";
@@ -566,8 +569,14 @@ public class ConfluenceCommentSectionExtractor {
      * @param outputPath destination .xlsx file path
      * @throws Exception on I/O or workbook write errors
      */
-    private static void writeExcel(List<CommentRecord> comments, String outputPath)
+    private static void writeExcel(List<CommentRecord> comments, String outputPath, List<SummaryRecord> summaryRows)
             throws Exception {
+
+        // Create a Map from summaryRows
+        Map<String, SummaryRecord> summaryMap = new HashMap<>();
+        for (SummaryRecord row : summaryRows) {
+            summaryMap.put(row.pageId, row);
+        }
 
         try (Workbook workbook = new XSSFWorkbook()) {
             Sheet sheet = workbook.createSheet("Comments");
@@ -612,7 +621,7 @@ public class ConfluenceCommentSectionExtractor {
                     "Module", "Legacy ID", "New ID", "Function Name", "Function Type",
                     "Type", "Section", "Highlighted Text",
                     "Comment ID", "Author", "Created Date", "Last Updated",
-                    "Status", "Comment Text", "Link"
+                    "Status", "Comment Text", "Link", "Reviewer Name"
             };
 
             Row headerRow = sheet.createRow(0);
@@ -627,7 +636,20 @@ public class ConfluenceCommentSectionExtractor {
             int rowNum = 1;
             Row lastDataRow = null;
 
+            // Rows per pageId
+            String processingPageId = null;
+            int rowCountPerPageId = 0;
+
             for (CommentRecord rec : comments) {
+                // Set the initial page ID and reset the counter when we encounter a new pageId
+                if (processingPageId == null || !processingPageId.equals(rec.pageId)) {
+                    // Set the count of records before reset
+                    if(processingPageId != null) {
+                        summaryMap.get(processingPageId).numberOfComments = rowCountPerPageId;
+                    }
+                    processingPageId = rec.pageId;
+                    rowCountPerPageId = 0;
+                }
                 if ((rec.originalSelection == null || rec.originalSelection.trim().isEmpty()) && lastDataRow != null) {
                     // Append comment text to the previous row's comment cell (col 13)
                     Cell commentCell = lastDataRow.getCell(13);
@@ -675,8 +697,16 @@ public class ConfluenceCommentSectionExtractor {
                 hl.setAddress(rec.link);
                 linkCell.setHyperlink(hl);
 
+                createCell(row, 15, rec.reviewerName,cs);
+
                 lastDataRow = row;
                 rowNum++;
+                rowCountPerPageId++;
+            }
+
+            // Handle Last Record from Input so that the count is set for the last pageId processed
+            if (processingPageId != null && summaryMap.containsKey(processingPageId)) {
+                summaryMap.get(processingPageId).numberOfComments = rowCountPerPageId;
             }
 
             // Column widths adjusted for more columns
@@ -694,6 +724,13 @@ public class ConfluenceCommentSectionExtractor {
             }
         }
         System.out.println("Excel written: " + outputPath);
+
+        /*
+        System.out.println("Summary of comments per pageId:");
+        for (SummaryRecord r : summaryMap.values()) {
+            System.out.println("  pageId: " + r.pageId + " " + r.newId + " " + r.functionName + " -> " + r.numberOfComments + " comment(s)");
+        }
+         */
     }
 
     /**
@@ -761,6 +798,7 @@ public class ConfluenceCommentSectionExtractor {
         String functionName;
         String functionType;
         String pageId;
+        String reviewerName;
     }
 
     /**
@@ -775,6 +813,7 @@ public class ConfluenceCommentSectionExtractor {
         String newId;
         String functionName;
         String functionType;
+        String pageId;
 
         // Comment fields
         String type;              // "Inline" | "Footer"
@@ -787,6 +826,7 @@ public class ConfluenceCommentSectionExtractor {
         String commentText;
         String status;            // "open" | "resolved"
         String link;
+        String reviewerName;
     }
 
     /**
