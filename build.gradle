@@ -19,15 +19,21 @@ dependencies {
     
     // JSON processing
     implementation 'org.json:json:20231013'
+
+    // HTML / storage-format XML parsing
+    implementation 'org.jsoup:jsoup:1.17.2'
+
+    // Optional pretty console summary table
+    implementation 'com.jakewharton.fliptables:fliptables:1.1.0'
 }
 
 application {
-    mainClass = 'ConfluenceCommentsExtractor'
+    mainClass = 'ConfluenceCommentSectionExtractor'
 }
 
 jar {
     manifest {
-        attributes 'Main-Class': 'ConfluenceCommentsExtractor'
+        attributes 'Main-Class': 'ConfluenceCommentSectionExtractor'
     }
 }
 
